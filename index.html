@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Constant Thickness Snake</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: black;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+<canvas id="reptileCanvas"></canvas>
+
+<script>
+  const canvas = document.getElementById("reptileCanvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  let segments = [];
+  let segmentLength = 25;
+  let initialSegments = 25;
+  const segmentRadius = 20; // Fixed thickness throughout
+
+  for (let i = 0; i < initialSegments; i++) {
+    segments.push({ x: canvas.width / 2, y: canvas.height / 2 });
+  }
+
+  let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+
+  document.addEventListener("mousemove", (e) => {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+
+  // Snake grows in length every 1.5 seconds
+  setInterval(() => {
+    const last = segments[segments.length - 1];
+    segments.push({ x: last.x, y: last.y });
+  }, 1500);
+
+  function animate() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Move head
+    segments[0].x += (mouse.x - segments[0].x) * 0.2;
+    segments[0].y += (mouse.y - segments[0].y) * 0.2;
+
+    // Move body
+    for (let i = 1; i < segments.length; i++) {
+      let dx = segments[i - 1].x - segments[i].x;
+      let dy = segments[i - 1].y - segments[i].y;
+      let angle = Math.atan2(dy, dx);
+
+      segments[i].x = segments[i - 1].x - Math.cos(angle) * segmentLength;
+      segments[i].y = segments[i - 1].y - Math.sin(angle) * segmentLength;
+    }
+
+    // Draw body - all segments same size
+    for (let i = segments.length - 1; i >= 0; i--) {
+      ctx.beginPath();
+      ctx.fillStyle = `hsl(${i * 5}, 90%, 50%)`;
+      ctx.arc(segments[i].x, segments[i].y, segmentRadius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Draw eyes on head
+    const head = segments[0];
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.arc(head.x - 7, head.y - 7, 3, 0, Math.PI * 2);
+    ctx.arc(head.x + 7, head.y - 7, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+</script>
+</body>
+</html>

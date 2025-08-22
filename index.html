@@ -1,17 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Constant Thickness Snake</title>
+  <meta charset="UTF-8" />
+  <title>Constant Thickness Snake (Touch + Mouse)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <style>
-    body {
+    html, body {
       margin: 0;
-      overflow: hidden;
-      background-color: black;
+      height: 100%;
+      background: #000;
+      overflow: hidden;          /* avoid page scroll */
+      -webkit-user-select: none;
+      user-select: none;
     }
-    canvas {
+    /* Stop browser panning/zooming on touch so canvas gets the events */
+    body, canvas {
+      touch-action: none;        /* critical for mobile control */
+      -ms-touch-action: none;
       display: block;
     }
+    canvas { width: 100vw; height: 100vh; }
   </style>
 </head>
 <body>
@@ -21,26 +29,72 @@
   const canvas = document.getElementById("reptileCanvas");
   const ctx = canvas.getContext("2d");
 
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  // Handle high-DPI so it looks crisp
+  function resizeCanvas() {
+    const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+    const cssW = Math.floor(window.innerWidth);
+    const cssH = Math.floor(window.innerHeight);
+    canvas.style.width = cssW + "px";
+    canvas.style.height = cssH + "px";
+    canvas.width = Math.floor(cssW * dpr);
+    canvas.height = Math.floor(cssH * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // draw in CSS pixels
+  }
+  resizeCanvas();
+  window.addEventListener("resize", resizeCanvas);
 
+  // Snake settings
   let segments = [];
-  let segmentLength = 25;
-  let initialSegments = 25;
+  const segmentLength = 25;
+  const initialSegments = 25;
   const segmentRadius = 20; // Fixed thickness throughout
 
-  for (let i = 0; i < initialSegments; i++) {
-    segments.push({ x: canvas.width / 2, y: canvas.height / 2 });
+  function center() {
+    return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
   }
 
-  let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+  for (let i = 0; i < initialSegments; i++) {
+    const c = center();
+    segments.push({ x: c.x, y: c.y });
+  }
 
-  document.addEventListener("mousemove", (e) => {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-  });
+  const mouse = center();
+  let isPointerDown = false;
 
-  // Snake grows in length every 1.5 seconds
+  // Helper to update target from an event
+  function updateTargetFromEvent(e) {
+    if (e && typeof e.clientX === "number") {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    } else if (e && e.touches && e.touches[0]) {
+      mouse.x = e.touches[0].clientX;
+      mouse.y = e.touches[0].clientY;
+    }
+  }
+
+  // Unified Pointer Events (works for mouse + touch + pen)
+  canvas.addEventListener("pointerdown", (e) => {
+    isPointerDown = true;
+    updateTargetFromEvent(e);
+    e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener("pointermove", (e) => {
+    // On desktop we want hover-follow; on mobile we follow while pressed
+    if (isPointerDown || e.pointerType === "mouse") {
+      updateTargetFromEvent(e);
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("pointerup", () => { isPointerDown = false; });
+  canvas.addEventListener("pointercancel", () => { isPointerDown = false; });
+  // Fallback for old Safari (optional)
+  canvas.addEventListener("touchstart", (e) => { isPointerDown = true; updateTargetFromEvent(e); e.preventDefault(); }, { passive: false });
+  canvas.addEventListener("touchmove",  (e) => { if (isPointerDown) { updateTargetFromEvent(e); e.preventDefault(); }}, { passive: false });
+  canvas.addEventListener("touchend",   () => { isPointerDown = false; });
+
+  // Snake grows every 1.5s
   setInterval(() => {
     const last = segments[segments.length - 1];
     segments.push({ x: last.x, y: last.y });
@@ -49,21 +103,22 @@
   function animate() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Move head
-    segments[0].x += (mouse.x - segments[0].x) * 0.2;
-    segments[0].y += (mouse.y - segments[0].y) * 0.2;
+    // Move head toward target
+    segments[0].x += (mouse.x - segments[0].x) * 0.20;
+    segments[0].y += (mouse.y - segments[0].y) * 0.20;
 
-    // Move body
+    // Keep constant spacing for each segment
     for (let i = 1; i < segments.length; i++) {
-      let dx = segments[i - 1].x - segments[i].x;
-      let dy = segments[i - 1].y - segments[i].y;
-      let angle = Math.atan2(dy, dx);
-
-      segments[i].x = segments[i - 1].x - Math.cos(angle) * segmentLength;
-      segments[i].y = segments[i - 1].y - Math.sin(angle) * segmentLength;
+      const prev = segments[i - 1];
+      const curr = segments[i];
+      const dx = prev.x - curr.x;
+      const dy = prev.y - curr.y;
+      const angle = Math.atan2(dy, dx);
+      curr.x = prev.x - Math.cos(angle) * segmentLength;
+      curr.y = prev.y - Math.sin(angle) * segmentLength;
     }
 
-    // Draw body - all segments same size
+    // Draw body (constant radius)
     for (let i = segments.length - 1; i >= 0; i--) {
       ctx.beginPath();
       ctx.fillStyle = `hsl(${i * 5}, 90%, 50%)`;
@@ -71,9 +126,9 @@
       ctx.fill();
     }
 
-    // Draw eyes on head
+    // Eyes on head
     const head = segments[0];
-    ctx.fillStyle = "white";
+    ctx.fillStyle = "#fff";
     ctx.beginPath();
     ctx.arc(head.x - 7, head.y - 7, 3, 0, Math.PI * 2);
     ctx.arc(head.x + 7, head.y - 7, 3, 0, Math.PI * 2);
@@ -81,7 +136,6 @@
 
     requestAnimationFrame(animate);
   }
-
   animate();
 </script>
 </body>
